@@ -174,6 +174,7 @@ def main():
         os.makedirs(RECORD_FOLDER)
 
     root = tk.Tk()
+    root.attributes('-fullscreen', True)
     app = VideoRecorderApp(root)
     root.mainloop()
 
