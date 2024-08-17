@@ -15,6 +15,7 @@ class VideoRecorderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Video Recorder App")
+        self.root.attributes('-fullscreen', True)
         self.camera_recorder = None
         self.selected_camera = None
         self.name = None
@@ -104,6 +105,7 @@ class VideoRecorderApp:
         # Create a new window for camera selection
         camera_selection_window = tk.Toplevel(self.root)
         camera_selection_window.title("Select Camera")
+        camera_selection_window.attributes('-fullscreen', True)
 
         tk.Label(camera_selection_window, text="Available Cameras:").pack(pady=10)
 
