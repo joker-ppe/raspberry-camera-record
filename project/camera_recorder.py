@@ -25,8 +25,8 @@ class CameraRecorder:
         self.window_name = f"Camera Recorder ({self.camera_info})"
 
         # Tối ưu hóa độ phân giải cho Raspberry Pi 3B+
-        self.width = 320  # Giảm từ 640
-        self.height = 240  # Giảm từ 480
+        self.width = 640  # Giảm từ 640
+        self.height = 480  # Giảm từ 480
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self.res = (self.width, self.height)
