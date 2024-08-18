@@ -1,10 +1,10 @@
 import os
 import platform
+import re
 import tkinter as tk
-from tkinter import filedialog, Listbox, messagebox, simpledialog
+from tkinter import Listbox, messagebox, simpledialog
 
 import cv2
-import re
 
 from camera_recorder import CameraRecorder
 
@@ -15,7 +15,7 @@ class VideoRecorderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Video Recorder App")
-        self.root.attributes('-fullscreen', True)
+        self.root.geometry("480x320")  # Set window size to 480x320
         self.camera_recorder = None
         self.selected_camera = None
         self.name = None
@@ -28,9 +28,15 @@ class VideoRecorderApp:
         self.record_button.pack(pady=10)
 
         # Listbox to show video files
-        self.video_listbox = Listbox(root, width=50, height=10)
+        self.video_listbox = Listbox(root, width=40, height=15)
         self.video_listbox.pack(pady=10)
         self.video_listbox.bind('<Double-1>', self.play_selected_video)
+
+    def set_window_size(self, window, width_in_inches, height_in_inches):
+        dpi = window.winfo_fpixels('1i')  # Get the screen DPI
+        width_in_pixels = inches_to_pixels(width_in_inches, dpi)
+        height_in_pixels = inches_to_pixels(height_in_inches, dpi)
+        window.geometry(f"{width_in_pixels}x{height_in_pixels}")
 
     def load_video(self):
         self.video_listbox.delete(0, tk.END)  # Clear listbox
@@ -105,12 +111,12 @@ class VideoRecorderApp:
         # Create a new window for camera selection
         camera_selection_window = tk.Toplevel(self.root)
         camera_selection_window.title("Select Camera")
-        camera_selection_window.attributes('-fullscreen', True)
+        camera_selection_window.geometry("480x320")
 
         tk.Label(camera_selection_window, text="Available Cameras:").pack(pady=10)
 
         # Create a Listbox to show available cameras
-        camera_listbox = tk.Listbox(camera_selection_window, width=50, height=10)
+        camera_listbox = tk.Listbox(camera_selection_window, width=40, height=15)
         for i, (_, info) in enumerate(cameras):
             camera_listbox.insert(tk.END, f"{i + 1}. {info}")
         camera_listbox.pack(pady=10)
@@ -150,6 +156,10 @@ class VideoRecorderApp:
         return available_cameras
 
 
+def inches_to_pixels(inches, dpi=96):
+    return int(inches * dpi)
+
+
 def get_camera_info(index):
     cap = cv2.VideoCapture(index)
     if not cap.isOpened():
@@ -176,7 +186,7 @@ def main():
         os.makedirs(RECORD_FOLDER)
 
     root = tk.Tk()
-    root.attributes('-fullscreen', True)
+    root.geometry("480x320")  # Set window size to 480x320
     app = VideoRecorderApp(root)
     root.mainloop()
 
