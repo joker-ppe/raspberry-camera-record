@@ -7,3 +7,4 @@ project/.idea/project.iml
 project/.idea/vcs.xml
 project/.idea/inspectionProfiles/profiles_settings.xml
 project/__pycache__/camera_recorder.cpython-310.pyc
+/project/record

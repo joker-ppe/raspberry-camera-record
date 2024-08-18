@@ -1,5 +1,4 @@
 import os
-import platform
 import re
 import tkinter as tk
 from tkinter import Listbox, messagebox, simpledialog
@@ -15,7 +14,7 @@ class VideoRecorderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Video Recorder App")
-        self.root.geometry("480x320")  # Set window size to 480x320
+        self.root.geometry("480x320")
         self.camera_recorder = None
         self.selected_camera = None
         self.name = None
@@ -28,15 +27,9 @@ class VideoRecorderApp:
         self.record_button.pack(pady=10)
 
         # Listbox to show video files
-        self.video_listbox = Listbox(root, width=40, height=15)
+        self.video_listbox = Listbox(root, width=40, height=10)
         self.video_listbox.pack(pady=10)
         self.video_listbox.bind('<Double-1>', self.play_selected_video)
-
-    def set_window_size(self, window, width_in_inches, height_in_inches):
-        dpi = window.winfo_fpixels('1i')  # Get the screen DPI
-        width_in_pixels = inches_to_pixels(width_in_inches, dpi)
-        height_in_pixels = inches_to_pixels(height_in_inches, dpi)
-        window.geometry(f"{width_in_pixels}x{height_in_pixels}")
 
     def load_video(self):
         self.video_listbox.delete(0, tk.END)  # Clear listbox
@@ -88,8 +81,8 @@ class VideoRecorderApp:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     def record_video(self):
-        self.name = tk.simpledialog.askstring("Input",
-                                              "Enter the name for the recording (no spaces, no special characters):")
+        self.name = simpledialog.askstring("Input",
+                                           "Enter the name for the recording (no spaces, no special characters):")
         if not self.name or not self.name.isalnum():
             messagebox.showerror("Invalid Name", "Invalid name. Only alphanumeric characters are allowed.")
             return
@@ -99,7 +92,7 @@ class VideoRecorderApp:
             camera_index, camera_info = self.selected_camera
             filename = f'mem_{self.name}'
             file_path = os.path.join(RECORD_FOLDER, filename)
-            self.camera_recorder = CameraRecorder(camera_index, camera_info, output_path=file_path)
+            self.camera_recorder = CameraRecorder(camera_index, camera_info, output_path=file_path, parent=self.root)
             self.camera_recorder.run()
 
     def select_camera(self):
@@ -108,15 +101,13 @@ class VideoRecorderApp:
             messagebox.showerror("No Cameras", "No cameras found.")
             return None
 
-        # Create a new window for camera selection
         camera_selection_window = tk.Toplevel(self.root)
         camera_selection_window.title("Select Camera")
         camera_selection_window.geometry("480x320")
 
         tk.Label(camera_selection_window, text="Available Cameras:").pack(pady=10)
 
-        # Create a Listbox to show available cameras
-        camera_listbox = tk.Listbox(camera_selection_window, width=40, height=15)
+        camera_listbox = tk.Listbox(camera_selection_window, width=40, height=5)
         for i, (_, info) in enumerate(cameras):
             camera_listbox.insert(tk.END, f"{i + 1}. {info}")
         camera_listbox.pack(pady=10)
@@ -150,35 +141,15 @@ class VideoRecorderApp:
     def check_cameras(self):
         available_cameras = []
         for i in range(10):
-            info = get_camera_info(i)
-            if info:
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                fps = int(cap.get(cv2.CAP_PROP_FPS))
+                info = f"Camera {i} ({width}x{height} @ {fps}fps)"
                 available_cameras.append((i, info))
+            cap.release()
         return available_cameras
-
-
-def inches_to_pixels(inches, dpi=96):
-    return int(inches * dpi)
-
-
-def get_camera_info(index):
-    cap = cv2.VideoCapture(index)
-    if not cap.isOpened():
-        return None
-
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-
-    # Attempt to get the camera name
-    if platform.system() == "Darwin":  # macOS
-        name = f"Camera {index}"  # macOS doesn't provide easy access to camera names
-    elif platform.system() == "Linux":  # Raspberry Pi OS
-        name = f"Camera {index}"  # Basic name for Linux systems
-    else:  # Windows or other systems
-        name = cap.getBackendName()
-
-    cap.release()
-    return f"{name} ({width}x{height} @ {fps}fps)"
 
 
 def main():
@@ -186,7 +157,6 @@ def main():
         os.makedirs(RECORD_FOLDER)
 
     root = tk.Tk()
-    root.geometry("480x320")  # Set window size to 480x320
     app = VideoRecorderApp(root)
     root.mainloop()
 

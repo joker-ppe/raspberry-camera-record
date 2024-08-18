@@ -1,12 +1,14 @@
 import os
 import time
+import tkinter as tk
 
 import cv2
-import numpy as np
+from PIL import Image, ImageTk
 
 
 class CameraRecorder:
-    def __init__(self, camera_index=0, camera_info="Unknown Camera", output_path="output.mp4", width=480, height=320):
+    def __init__(self, camera_index=0, camera_info="Unknown Camera", output_path="output.mp4", width=480, height=320,
+                 parent=None):
         self.camera_index = camera_index
         self.camera_info = camera_info
         self.cap = cv2.VideoCapture(self.camera_index)
@@ -15,27 +17,44 @@ class CameraRecorder:
         self.output = None
         self.start_time = 0
         self.frame_count = 0
-        self.window_name = f"Camera Recorder ({self.camera_info})"
 
-        # Set resolution
         self.width = width
         self.height = height
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self.res = (self.width, self.height)
 
+        # Initialize OpenCV Face Detection
+        try:
+            self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            if self.face_cascade.empty():
+                raise ValueError("Failed to load Haar Cascade classifier")
+        except Exception as e:
+            print(f"Error initializing OpenCV Face Detection: {e}")
+            print("Face detection will be disabled.")
+            self.face_cascade = None
+
         self.fps = round(self.measure_fps(), 2)
         self.frame_duration = 1.0 / self.fps
 
-        # Initialize OpenCV face detection
-        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        # Tkinter window setup
+        self.parent = parent
+        self.window = tk.Toplevel(self.parent)
+        self.window.title(f"Camera Recorder ({self.camera_info})")
+        self.window.geometry(f"{self.width}x{self.height + 50}")
+
+        self.canvas = tk.Canvas(self.window, width=self.width, height=self.height)
+        self.canvas.pack()
+
+        self.button = tk.Button(self.window, text="Start Recording", command=self.toggle_recording)
+        self.button.pack(pady=10)
+
+        self.info_label = tk.Label(self.window, text=f"FPS: {self.fps:.2f}")
+        self.info_label.pack()
 
         print(f"Camera FPS: {self.fps:.2f}, Resolution: {self.width}x{self.height}")
 
-    def inches_to_pixels(self, size_display, dpi=96):
-        return int(float(size_display) * dpi)
-
-    def measure_fps(self, num_frames=50):
+    def measure_fps(self, num_frames=100):
         print("Measuring FPS...")
         frame_times = []
 
@@ -45,6 +64,13 @@ class CameraRecorder:
             if not ret:
                 print("Failed to grab frame during FPS measurement")
                 break
+
+            # Resize frame
+            frame = cv2.resize(frame, (self.width, self.height))
+
+            # Perform face detection (if available)
+            self.detect_faces(frame)
+
             end_time = time.time()
             frame_time = end_time - start_time
             frame_times.append(frame_time)
@@ -57,6 +83,29 @@ class CameraRecorder:
 
         print(f"Measured FPS: {actual_fps:.2f}")
         return min(actual_fps, 30)  # Limit FPS to 30
+
+    def detect_faces(self, frame):
+        if self.face_cascade is None:
+            return frame
+
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        except Exception as e:
+            print(f"Error during face detection: {e}")
+
+        return frame
+
+    def toggle_recording(self):
+        if not self.is_recording:
+            self.start_recording()
+            self.button.config(text="Stop Recording")
+        else:
+            self.stop_recording()
+            self.button.config(text="Start Recording")
 
     def start_recording(self):
         if not self.is_recording:
@@ -89,13 +138,6 @@ class CameraRecorder:
             self.output.write(frame)
             self.frame_count += 1
 
-    def detect_faces(self, frame):
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y, w, h), (255, 0, 0), 2)
-        return frame
-
     def add_timer(self, frame):
         if self.is_recording:
             current_time = time.time() - self.start_time
@@ -104,69 +146,28 @@ class CameraRecorder:
         return frame
 
     def run(self):
-        cv2.namedWindow(self.window_name)
-        cv2.setMouseCallback(self.window_name, self.handle_click)
-        cv2.resizeWindow(self.window_name, self.width, self.height + 50)  # Thêm 50 pixel cho vùng nút
+        self.update()
+        self.window.mainloop()
 
-        while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                print(f"Failed to grab frame from {self.camera_info}. Exiting...")
-                break
-
+    def update(self):
+        ret, frame = self.cap.read()
+        if ret:
             frame = cv2.resize(frame, (self.width, self.height))
             frame = self.detect_faces(frame)
             frame = self.add_timer(frame)
             self.process_frame(frame)
 
-            frame_with_buttons = self.create_buttons(frame)
-            cv2.imshow(self.window_name, frame_with_buttons)
+            # Convert the frame to RGB for displaying in Tkinter
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            photo = ImageTk.PhotoImage(image=Image.fromarray(rgb_frame))
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                if self.is_recording:
-                    self.stop_recording()
-                break
+            # Update the canvas with the new frame
+            self.canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+            self.canvas.image = photo
 
+        self.window.after(int(self.frame_duration * 1000), self.update)
+
+    def __del__(self):
         self.cap.release()
         if self.output:
             self.output.release()
-        cv2.destroyAllWindows()
-
-    def create_buttons(self, frame):
-        height, width = frame.shape[:2]
-        button_frame = np.zeros((50, width, 3), np.uint8)
-
-        # Vẽ nút với kích thước và vị trí cố định
-        button_x, button_y = 10, 10
-        button_width, button_height = 90, 30
-
-        if not self.is_recording:
-            cv2.rectangle(button_frame, (button_x, button_y), (button_x + button_width, button_y + button_height),
-                          (0, 255, 0), -1)
-            cv2.putText(button_frame, "Start", (button_x + 20, button_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0),
-                        2)
-        else:
-            cv2.rectangle(button_frame, (button_x, button_y), (button_x + button_width, button_y + button_height),
-                          (0, 0, 255), -1)
-            cv2.putText(button_frame, "Stop", (button_x + 25, button_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        (255, 255, 255), 2)
-
-        info_text = f"{self.camera_info} - FPS: {self.fps:.2f}"
-        cv2.putText(button_frame, info_text, (width - 200, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        frame_with_buttons = np.vstack((frame, button_frame))
-        return frame_with_buttons
-
-    def handle_click(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            # Xác định vị trí và kích thước nút
-            button_x, button_y = 10, self.height
-            button_width, button_height = 90, 30
-
-            # Kiểm tra xem click có nằm trong vùng nút không
-            if button_x <= x <= button_x + button_width and button_y <= y <= button_y + button_height:
-                if not self.is_recording:
-                    self.start_recording()
-                else:
-                    self.stop_recording()
