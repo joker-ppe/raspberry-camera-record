@@ -1,9 +1,13 @@
+import logging
 import os
+import subprocess
+import threading
 import time
 import tkinter as tk
+
 import cv2
-import numpy as np
-import subprocess
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class CameraRecorder:
@@ -33,8 +37,8 @@ class CameraRecorder:
             if self.face_cascade.empty():
                 raise ValueError("Failed to load Haar Cascade classifier")
         except Exception as e:
-            print(f"Error initializing OpenCV Face Detection: {e}")
-            print("Face detection will be disabled.")
+            logging.error(f"Error initializing OpenCV Face Detection: {e}")
+            logging.warning("Face detection will be disabled.")
             self.face_cascade = None
 
         # Tkinter window setup
@@ -52,15 +56,25 @@ class CameraRecorder:
         self.info_label = tk.Label(self.window, text=f"FPS: {self.fps:.2f}")
         self.info_label.pack()
 
-        print(f"Camera FPS: {self.fps:.2f}, Resolution: {self.width}x{self.height}")
+        logging.info(f"Camera FPS: {self.fps:.2f}, Resolution: {self.width}x{self.height}")
 
         # Start preview
         self.start_preview()
 
     def start_preview(self):
         preview_command = f"libcamera-vid -t 0 --width {self.width} --height {self.height} --framerate {self.fps} --inline --listen -o tcp://127.0.0.1:8888"
-        self.preview_process = subprocess.Popen(preview_command, shell=True)
+        logging.info(f"Starting preview with command: {preview_command}")
+        self.preview_process = subprocess.Popen(preview_command, shell=True, stdout=subprocess.PIPE,
+                                                stderr=subprocess.PIPE)
+
+        # Start a thread to log the output of the preview process
+        threading.Thread(target=self.log_process_output, args=(self.preview_process, "Preview"), daemon=True).start()
+
         time.sleep(2)  # Give some time for the preview to start
+
+    def log_process_output(self, process, process_name):
+        for line in process.stderr:
+            logging.debug(f"{process_name} process output: {line.decode().strip()}")
 
     def start_recording(self):
         if not self.is_recording:
@@ -69,21 +83,27 @@ class CameraRecorder:
                 full_path = self.output_path + f"_{self.fps}.h264"
 
                 record_command = f"libcamera-vid -t 0 --width {self.width} --height {self.height} --framerate {self.fps} -o {full_path}"
-                self.record_process = subprocess.Popen(record_command, shell=True)
+                logging.info(f"Starting recording with command: {record_command}")
+                self.record_process = subprocess.Popen(record_command, shell=True, stdout=subprocess.PIPE,
+                                                       stderr=subprocess.PIPE)
+
+                # Start a thread to log the output of the record process
+                threading.Thread(target=self.log_process_output, args=(self.record_process, "Record"),
+                                 daemon=True).start()
 
                 self.is_recording = True
                 self.start_time = time.time()
                 self.frame_count = 0
-                print(f"Recording started on {self.camera_info}...")
-                print(f"Saving video to: {full_path}")
+                logging.info(f"Recording started on {self.camera_info}...")
+                logging.info(f"Saving video to: {full_path}")
             except Exception as e:
-                print(f"Error: Could not start recording. Details: {str(e)}")
-                print(f"Current working directory: {os.getcwd()}")
-                print(f"Output path: {self.output_path}")
-                print(
+                logging.error(f"Error: Could not start recording. Details: {str(e)}")
+                logging.debug(f"Current working directory: {os.getcwd()}")
+                logging.debug(f"Output path: {self.output_path}")
+                logging.debug(
                     f"Permissions on output directory: {oct(os.stat(os.path.dirname(self.output_path)).st_mode)[-3:]}")
         else:
-            print("Already recording.")
+            logging.warning("Already recording.")
 
     def stop_recording(self):
         if self.is_recording:
@@ -91,8 +111,8 @@ class CameraRecorder:
             self.is_recording = False
             duration = time.time() - self.start_time
             actual_fps = self.frame_count / duration
-            print(f"Recording stopped on {self.camera_info}. Duration: {duration:.2f} seconds, "
-                  f"Frames: {self.frame_count}, Actual FPS: {actual_fps:.2f}")
+            logging.info(f"Recording stopped on {self.camera_info}. Duration: {duration:.2f} seconds, "
+                         f"Frames: {self.frame_count}, Actual FPS: {actual_fps:.2f}")
 
     def toggle_recording(self):
         if not self.is_recording:
@@ -113,7 +133,7 @@ class CameraRecorder:
             for (x, y, w, h) in faces:
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
         except Exception as e:
-            print(f"Error during face detection: {e}")
+            logging.error(f"Error during face detection: {e}")
 
         return frame
 
@@ -130,6 +150,10 @@ class CameraRecorder:
 
     def update(self):
         cap = cv2.VideoCapture("tcp://127.0.0.1:8888")
+        if not cap.isOpened():
+            logging.error("Failed to open video capture")
+            return
+
         while True:
             ret, frame = cap.read()
             if ret:
@@ -142,18 +166,22 @@ class CameraRecorder:
                 # Convert the frame to RGB
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-                # Convert to PhotoImage
-                photo = tk.PhotoImage(data=cv2.imencode('.png', rgb_frame)[1].tobytes())
+                try:
+                    # Convert to PhotoImage
+                    photo = tk.PhotoImage(data=cv2.imencode('.png', rgb_frame)[1].tobytes())
 
-                # Update the canvas with the new frame
-                self.canvas.create_image(0, 0, anchor=tk.NW, image=photo)
-                self.canvas.image = photo
+                    # Update the canvas with the new frame
+                    self.canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+                    self.canvas.image = photo
+                except Exception as e:
+                    logging.error(f"Error updating frame: {e}")
 
                 self.window.update()
 
                 if not self.window.winfo_exists():
                     break
             else:
+                logging.warning("Failed to read frame")
                 break
 
         cap.release()
