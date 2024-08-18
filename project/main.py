@@ -92,7 +92,7 @@ class VideoRecorderApp:
             camera_index, camera_info = self.selected_camera
             filename = f'mem_{self.name}'
             file_path = os.path.join(RECORD_FOLDER, filename)
-            self.camera_recorder = CameraRecorder(camera_index, camera_info, output_path=file_path, parent=self.root)
+            self.camera_recorder = CameraRecorder(camera_index=camera_index, camera_info=camera_info, output_path=file_path, parent=self.root)
             self.camera_recorder.run()
 
     def select_camera(self):

@@ -7,8 +7,10 @@ import subprocess
 
 
 class CameraRecorder:
-    def __init__(self, camera_info="Raspberry Pi Camera", output_path="output.h264", width=640, height=480,
+    def __init__(self, camera_index=0, camera_info="Raspberry Pi Camera", output_path="output.h264", width=640,
+                 height=480,
                  parent=None):
+        self.camera_index = camera_index
         self.camera_info = camera_info
         self.output_path = output_path
         self.is_recording = False
@@ -21,6 +23,9 @@ class CameraRecorder:
 
         self.fps = 30
         self.frame_duration = 1.0 / self.fps
+
+        self.preview_process = None
+        self.record_process = None
 
         # Initialize OpenCV Face Detection
         try:
@@ -50,7 +55,6 @@ class CameraRecorder:
         print(f"Camera FPS: {self.fps:.2f}, Resolution: {self.width}x{self.height}")
 
         # Start preview
-        self.preview_process = None
         self.start_preview()
 
     def start_preview(self):
@@ -155,7 +159,7 @@ class CameraRecorder:
         cap.release()
 
     def __del__(self):
-        if self.preview_process:
+        if hasattr(self, 'preview_process') and self.preview_process:
             self.preview_process.terminate()
         if hasattr(self, 'record_process') and self.record_process:
             self.record_process.terminate()
